@@ -1,0 +1,32 @@
+{
+  "name": "AI Evaluation Quality Router",
+  "nodes": [
+    {
+      "parameters": {"httpMethod":"POST","path":"ai-evaluation-quality","responseMode":"responseNode"},
+      "id":"webhook-1","name":"Webhook","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[0,0]
+    },
+    {
+      "parameters": {"jsCode":"const keys=['evaluation_id','accuracy','relevance','clarity','instruction_following','completeness']; const b=$json.body??$json; const missing=keys.filter(k=>b[k]===undefined||b[k]===null||b[k]===''); const s=keys.slice(1).map(k=>Number(b[k])); const valid=s.every(v=>Number.isFinite(v)&&v>=1&&v<=5); const avg=valid?Number((s.reduce((a,v)=>a+v,0)/s.length).toFixed(2)):null; return [{json:{...b,validation:{valid:missing.length===0&&valid,missing_fields:missing,average_score:avg},quality_status:missing.length===0&&valid&&avg>=3.5?'PASS':'REVIEW'}}];"},
+      "id":"code-1","name":"Validate & Score","type":"n8n-nodes-base.code","typeVersion":2,"position":[260,0]
+    },
+    {
+      "parameters":{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict"},"conditions":[{"leftValue":"={{ $json.quality_status }}","rightValue":"PASS","operator":{"type":"string","operation":"equals"}}],"combinator":"and"}},
+      "id":"if-1","name":"Quality Check","type":"n8n-nodes-base.if","typeVersion":2.2,"position":[520,0]
+    },
+    {
+      "parameters":{"respondWith":"json","responseBody":"={{ { status: 'accepted', quality_status: $json.quality_status, evaluation_id: $json.evaluation_id, average_score: $json.validation.average_score } }}"},
+      "id":"pass","name":"Valid Result","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.4,"position":[780,-100]
+    },
+    {
+      "parameters":{"respondWith":"json","responseBody":"={{ { status: 'human_review_required', quality_status: $json.quality_status, evaluation_id: $json.evaluation_id, validation: $json.validation } }}"},
+      "id":"review","name":"Human Review","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.4,"position":[780,100]
+    }
+  ],
+  "connections":{
+    "Webhook":{"main":[[{"node":"Validate & Score","type":"main","index":0}]]},
+    "Validate & Score":{"main":[[{"node":"Quality Check","type":"main","index":0}]]},
+    "Quality Check":{"main":[[{"node":"Valid Result","type":"main","index":0}],[{"node":"Human Review","type":"main","index":0}]]}
+  },
+  "active":false,
+  "settings":{}
+}
